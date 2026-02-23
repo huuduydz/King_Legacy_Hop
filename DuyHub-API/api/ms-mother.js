@@ -15,7 +15,13 @@ export default async function handler(req, res) {
 
   const userAccount = req.query.account; // Ví dụ: "khiem"
   const playerName = req.query.name;     // Ví dụ: "khiem2" (Tên trong game)
+  // Lấy thông tin thiết bị đang gửi yêu cầu
+  const userAgent = req.headers['user-agent'] || "";
 
+  // Nếu là Google Chrome, Safari, Cốc Cốc, Postman... -> ĐÁ VĂNG
+  if (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Postman")) {
+    return res.send(`print("🤬 Dumper tính bú code à? Còn cái nịt!")`);
+  }
   if (!userAccount || !playerName) {
     return res.send(`game.Players.LocalPlayer:Kick("❌ Lỗi: Thiếu _G.account hoặc Tên ingame Roblox!")`);
   }
