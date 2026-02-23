@@ -13,11 +13,11 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  const userAccount = req.query.account;
-  const playerName = req.query.name;
+  const userAccount = req.query.account; // Ví dụ: "khiem"
+  const playerName = req.query.name;     // Ví dụ: "khiem2" (Tên trong game)
 
   if (!userAccount || !playerName) {
-    return res.send(`game.Players.LocalPlayer:Kick("❌ Lỗi: Không thể xác thực Tài Khoản hoặc Tên Roblox!")`);
+    return res.send(`game.Players.LocalPlayer:Kick("❌ Lỗi: Thiếu _G.account hoặc Tên ingame Roblox!")`);
   }
 
   try {
@@ -25,35 +25,42 @@ export default async function handler(req, res) {
     const db = client.db('DuyHubDB');
     const users = db.collection('Users');
 
-    // Tìm tài khoản trong MongoDB
     const accountData = await users.findOne({ account: userAccount });
 
+    // 1. Kiểm tra User có mua Script không
     if (!accountData || !accountData.active) {
-      return res.send(`game.Players.LocalPlayer:Kick("❌ Tài khoản [ ${userAccount} ] không tồn tại hoặc đã hết hạn!")`);
+      return res.send(`game.Players.LocalPlayer:Kick("❌ User [ ${userAccount} ] không tồn tại hoặc đã hết hạn thuê Script!")`);
     }
 
-    // Kiểm tra khóa Nick Roblox
-    if (accountData.robloxName === null) {
-      await users.updateOne({ account: userAccount }, { $set: { robloxName: playerName } });
-      console.log(`[+] Liên kết Account ${userAccount} với Nick: ${playerName}`);
-    } else if (accountData.robloxName !== playerName) {
-      return res.send(`game.Players.LocalPlayer:Kick("❌ TÀI KHOẢN NÀY ĐÃ BỊ KHÓA VỚI NICK: ${accountData.robloxName}!\\nTuyệt đối không dùng cho nick khác!")`);
+    // 2. Lấy danh sách Nick Roblox mà Admin đã gán cho User này
+    const allowedNicks = accountData.robloxNames || [];
+    
+    // Nếu Admin chưa add nick Roblox nào
+    if (allowedNicks.length === 0) {
+        return res.send(`game.Players.LocalPlayer:Kick("❌ User [ ${userAccount} ] chưa được Admin Duy cấp quyền cho bất kỳ nick Roblox nào!")`);
     }
 
-    // FETCH CODE TỪ GITHUB
+    // Nếu tên đang chạy KHÔNG NẰM TRONG danh sách được Admin cho phép
+    if (!allowedNicks.includes(playerName)) {
+        return res.send(`game.Players.LocalPlayer:Kick("❌ Nick Roblox [ ${playerName} ] KHÔNG ĐƯỢC PHÉP sử dụng gói Script của User [ ${userAccount} ]!")`);
+    }
+
+    // ================================================================
+    // FETCH CODE TỪ GITHUB (KHI XÁC THỰC THÀNH CÔNG)
+    // ================================================================
     const githubRawUrl = "https://raw.githubusercontent.com/huuduydz/AutoSam_TpHome/refs/heads/main/HopMs_Mother.lua";
     const fetchResponse = await fetch(githubRawUrl);
     
     if (!fetchResponse.ok) {
-      return res.send(`game.Players.LocalPlayer:Kick("❌ Máy chủ bảo mật đang bảo trì (Lỗi lấy dữ liệu GitHub)!")`);
+      return res.send(`game.Players.LocalPlayer:Kick("❌ Máy chủ bảo mật DuyHub đang bảo trì (Lỗi Github)!")`);
     }
     
     const luaCode = await fetchResponse.text();
-    const payloadScript = `print("✅ Xác thực DuyHub thành công! Xin chào ${playerName}")\n` + luaCode;
+    const payloadScript = `print("✅ Xác thực DuyHub thành công! Chào mừng ${playerName} đã trở lại.")\n` + luaCode;
 
     return res.status(200).send(payloadScript);
 
   } catch (error) {
-    return res.send(`game.Players.LocalPlayer:Kick("❌ Lỗi Database MongoDB!")`);
+    return res.send(`game.Players.LocalPlayer:Kick("❌ Lỗi kết nối Database MongoDB DuyHub!")`);
   }
 }
