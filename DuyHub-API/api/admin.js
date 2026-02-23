@@ -1,57 +1,54 @@
-import { kv } from '@vercel/kv';
+import { MongoClient } from 'mongodb';
 
-// ĐỔI MẬT KHẨU CỦA BẠN Ở ĐÂY
-const ADMIN_PASSWORD = "3399216308";
+const ADMIN_PASSWORD = "3399216308"; // Đổi pass đăng nhập web của bạn ở đây
+
+let cachedClient = null;
+async function connectDB() {
+  if (cachedClient) return cachedClient;
+  const client = new MongoClient(process.env.MONGODB_URI);
+  await client.connect();
+  cachedClient = client;
+  return client;
+}
 
 export default async function handler(req, res) {
-  // =================================================================
-  // 1. XỬ LÝ LỆNH (HỖ TRỢ NHIỀU TÀI KHOẢN CÙNG LÚC)
-  // =================================================================
   if (req.method === 'POST') {
     const { pass, action, account } = req.body;
 
-    if (pass !== ADMIN_PASSWORD) {
-      return res.status(200).json({ success: false, msg: "❌ Sai mật khẩu Admin!" });
-    }
-    if (!account || account.trim() === "") {
-      return res.status(200).json({ success: false, msg: "❌ Vui lòng nhập ít nhất 1 tên khách hàng!" });
-    }
+    if (pass !== ADMIN_PASSWORD) return res.status(200).json({ success: false, msg: "❌ Sai mật khẩu Admin!" });
+    if (!account || account.trim() === "") return res.status(200).json({ success: false, msg: "❌ Vui lòng nhập tên!" });
 
     try {
-      // Tách các tên dựa trên dấu phẩy hoặc dấu xuống dòng
-      const accountList = account.split(/[\n,]+/).map(a => a.trim()).filter(a => a !== "");
-      
-      let added = [];
-      let existed = [];
-      let deleted = [];
-      let reset = [];
+      const client = await connectDB();
+      const db = client.db('DuyHubDB'); // Tên cơ sở dữ liệu
+      const users = db.collection('Users'); // Tên bảng lưu khách hàng
 
-      // VÒNG LẶP XỬ LÝ TỪNG TÀI KHOẢN
+      const accountList = account.split(/[\n,]+/).map(a => a.trim()).filter(a => a !== "");
+      let added = [], existed = [], deleted = [], reset = [];
+
       for (const acc of accountList) {
         if (action === "add") {
-          const existing = await kv.get(`user_${acc}`);
+          const existing = await users.findOne({ account: acc });
           if (existing) {
             existed.push(acc);
           } else {
-            await kv.set(`user_${acc}`, { robloxName: null, active: true });
+            await users.insertOne({ account: acc, robloxName: null, active: true });
             added.push(acc);
           }
         } 
         else if (action === "del") {
-          await kv.del(`user_${acc}`);
+          await users.deleteOne({ account: acc });
           deleted.push(acc);
         } 
         else if (action === "reset") {
-          const existing = await kv.get(`user_${acc}`);
+          const existing = await users.findOne({ account: acc });
           if (existing) {
-            existing.robloxName = null;
-            await kv.set(`user_${acc}`, existing);
+            await users.updateOne({ account: acc }, { $set: { robloxName: null } });
             reset.push(acc);
           }
         }
       }
 
-      // TỔNG HỢP KẾT QUẢ ĐỂ HIỂN THỊ
       let resultMsg = "";
       if (action === "add") {
         if (added.length > 0) resultMsg += `✅ Đã cấp quyền: <b>${added.join(", ")}</b><br>`;
@@ -65,13 +62,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, msg: resultMsg });
 
     } catch (error) {
-      return res.status(200).json({ success: false, msg: "❌ Lỗi kết nối Database KV! Vui lòng kiểm tra lại cấu hình." });
+      return res.status(200).json({ success: false, msg: "❌ Lỗi kết nối MongoDB!" });
     }
   }
 
-  // =================================================================
-  // 2. GIAO DIỆN WEB DÀNH CHO ADMIN
-  // =================================================================
+  // GIAO DIỆN WEB (Giữ nguyên cấu trúc HTML xịn xò)
   const html = `
     <!DOCTYPE html>
     <html lang="vi">
@@ -102,60 +97,44 @@ export default async function handler(req, res) {
     <body>
         <div class="container">
             <h2>👑 DuyHub Panel</h2>
-            
             <div class="input-group">
                 <label>Mật khẩu Quản trị viên:</label>
                 <input type="password" id="adminPass" placeholder="••••••••••••">
             </div>
-
             <div class="input-group">
                 <label>Danh sách tài khoản (Cách nhau bằng dấu phẩy hoặc xuống dòng):</label>
                 <textarea id="username" placeholder="khiem1\nkhiem2\ntuan123"></textarea>
             </div>
-
             <button class="btn-add" onclick="executeAction('add')">➕ CẤP QUYỀN HÀNG LOẠT</button>
             <button class="btn-reset" onclick="executeAction('reset')">🔄 MỞ KHÓA NICK HÀNG LOẠT</button>
             <button class="btn-del" onclick="executeAction('del')">🗑️ THU HỒI HÀNG LOẠT</button>
-
             <div id="output" class="result-box" style="color: #888;">Hệ thống đang chờ lệnh...</div>
         </div>
-
         <script>
             async function executeAction(actionType) {
                 const pass = document.getElementById('adminPass').value;
                 const account = document.getElementById('username').value;
                 const output = document.getElementById('output');
-
                 if (!pass || !account) {
-                    output.innerHTML = "<span style='color: #ff4757;'>❌ Vui lòng điền đủ mật khẩu và danh sách khách!</span>";
-                    return;
+                    output.innerHTML = "<span style='color: #ff4757;'>❌ Vui lòng điền đủ thông tin!</span>"; return;
                 }
-
-                output.innerHTML = "⏳ Đang kết nối tới máy chủ Vercel KV...";
-
+                output.innerHTML = "⏳ Đang kết nối tới máy chủ MongoDB...";
                 try {
                     const res = await fetch('/api/admin', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ pass, action: actionType, account })
                     });
-                    
                     const data = await res.json();
-
-                    if (data.success) {
-                        output.innerHTML = "<span style='color: #00ff88;'>" + data.msg + "</span>";
-                    } else {
-                        output.innerHTML = "<span style='color: #ff4757;'>" + data.msg + "</span>";
-                    }
+                    if (data.success) output.innerHTML = "<span style='color: #00ff88;'>" + data.msg + "</span>";
+                    else output.innerHTML = "<span style='color: #ff4757;'>" + data.msg + "</span>";
                 } catch (err) {
-                    output.innerHTML = "<span style='color: #ff4757;'>❌ Lỗi kết nối mạng! Không thể gửi lệnh.</span>";
+                    output.innerHTML = "<span style='color: #ff4757;'>❌ Lỗi kết nối mạng!</span>";
                 }
             }
         </script>
     </body>
     </html>
   `;
-  
   res.setHeader('Content-Type', 'text/html');
   return res.status(200).send(html);
 }
