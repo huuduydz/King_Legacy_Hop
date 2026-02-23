@@ -1,120 +1,161 @@
 import { kv } from '@vercel/kv';
 
-const ADMIN_PASSWORD = "PassCuaDuy123"; // Đổi pass ở đây
+// ĐỔI MẬT KHẨU CỦA BẠN Ở ĐÂY
+const ADMIN_PASSWORD = "3399216308";
 
 export default async function handler(req, res) {
-  // 1. XỬ LÝ LỆNH TỪ NÚT BẤM (POST REQUEST)
+  // =================================================================
+  // 1. XỬ LÝ LỆNH (HỖ TRỢ NHIỀU TÀI KHOẢN CÙNG LÚC)
+  // =================================================================
   if (req.method === 'POST') {
     const { pass, action, account } = req.body;
 
     if (pass !== ADMIN_PASSWORD) {
       return res.status(200).json({ success: false, msg: "❌ Sai mật khẩu Admin!" });
     }
-    if (!account) {
-      return res.status(200).json({ success: false, msg: "❌ Vui lòng nhập tên khách!" });
+    if (!account || account.trim() === "") {
+      return res.status(200).json({ success: false, msg: "❌ Vui lòng nhập ít nhất 1 tên khách hàng!" });
     }
 
     try {
-      if (action === "add") {
-        const existing = await kv.get(`user_${account}`);
-        if (existing) return res.status(200).json({ success: false, msg: `❌ Khách ${account} đã tồn tại!` });
+      // Tách các tên dựa trên dấu phẩy hoặc dấu xuống dòng
+      const accountList = account.split(/[\n,]+/).map(a => a.trim()).filter(a => a !== "");
+      
+      let added = [];
+      let existed = [];
+      let deleted = [];
+      let reset = [];
 
-        await kv.set(`user_${account}`, { robloxName: null, active: true });
-        return res.status(200).json({ success: true, msg: `✅ Đã tạo quyền cho: ${account}` });
-      }
-      
-      if (action === "del") {
-        await kv.del(`user_${account}`);
-        return res.status(200).json({ success: true, msg: `🗑️ Đã thu hồi quyền của: ${account}` });
-      }
-      
-      if (action === "reset") {
-        const existing = await kv.get(`user_${account}`);
-        if (existing) {
-          existing.robloxName = null;
-          await kv.set(`user_${account}`, existing);
-          return res.status(200).json({ success: true, msg: `🔄 Đã mở khóa nick cho: ${account}` });
+      // VÒNG LẶP XỬ LÝ TỪNG TÀI KHOẢN
+      for (const acc of accountList) {
+        if (action === "add") {
+          const existing = await kv.get(`user_${acc}`);
+          if (existing) {
+            existed.push(acc);
+          } else {
+            await kv.set(`user_${acc}`, { robloxName: null, active: true });
+            added.push(acc);
+          }
+        } 
+        else if (action === "del") {
+          await kv.del(`user_${acc}`);
+          deleted.push(acc);
+        } 
+        else if (action === "reset") {
+          const existing = await kv.get(`user_${acc}`);
+          if (existing) {
+            existing.robloxName = null;
+            await kv.set(`user_${acc}`, existing);
+            reset.push(acc);
+          }
         }
-        return res.status(200).json({ success: false, msg: `❌ Không tìm thấy: ${account}` });
       }
+
+      // TỔNG HỢP KẾT QUẢ ĐỂ HIỂN THỊ
+      let resultMsg = "";
+      if (action === "add") {
+        if (added.length > 0) resultMsg += `✅ Đã cấp quyền: <b>${added.join(", ")}</b><br>`;
+        if (existed.length > 0) resultMsg += `⚠️ Đã tồn tại: <span style="color:#aaa;">${existed.join(", ")}</span>`;
+      } else if (action === "del") {
+        resultMsg += `🗑️ Đã xóa: <b>${deleted.join(", ")}</b>`;
+      } else if (action === "reset") {
+        resultMsg += `🔄 Đã mở khóa Nick cho: <b>${reset.join(", ")}</b>`;
+      }
+
+      return res.status(200).json({ success: true, msg: resultMsg });
+
     } catch (error) {
-      return res.status(200).json({ success: false, msg: "❌ Lỗi kết nối Database!" });
+      return res.status(200).json({ success: false, msg: "❌ Lỗi kết nối Database KV! Vui lòng kiểm tra lại cấu hình." });
     }
   }
 
-  // 2. HIỂN THỊ GIAO DIỆN WEB (GET REQUEST)
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.status(200).send(`
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DuyHub - Quản Lý Khách Hàng</title>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #121212; color: #ffffff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { background-color: #1e1e24; padding: 30px; border-radius: 10px; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; }
-        h2 { text-align: center; color: #00ff88; margin-top: 0; }
-        label { font-size: 13px; color: #aaa; margin-bottom: 5px; display: block; }
-        input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #444; background: #121212; color: #fff; box-sizing: border-box; }
-        input:focus { border-color: #00ff88; outline: none; }
-        button { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        .btn-add { background: #00ff88; color: #000; }
-        .btn-add:hover { background: #00cc6a; }
-        .btn-reset { background: #f39c12; color: #fff; }
-        .btn-reset:hover { background: #d68910; }
-        .btn-del { background: #ff4757; color: #fff; }
-        .btn-del:hover { background: #ff3344; }
-        #log { margin-top: 15px; text-align: center; font-size: 14px; padding: 10px; background: #121212; border-radius: 5px; border: 1px dashed #555; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <h2>DUYHUB ADMIN</h2>
-        
-        <label>Mật khẩu Admin:</label>
-        <input type="password" id="pass" placeholder="Nhập mật khẩu...">
-        
-        <label>Tên khách hàng (VD: khiem):</label>
-        <input type="text" id="user" placeholder="Nhập tên tài khoản khách...">
-        
-        <button class="btn-add" onclick="sendAction('add')">➕ CẤP QUYỀN MỚI</button>
-        <button class="btn-reset" onclick="sendAction('reset')">🔄 MỞ KHÓA NICK (RESET)</button>
-        <button class="btn-del" onclick="sendAction('del')">🗑️ THU HỒI QUYỀN (XÓA)</button>
-        
-        <div id="log" style="color: #888;">Trạng thái hệ thống...</div>
-    </div>
+  // =================================================================
+  // 2. GIAO DIỆN WEB DÀNH CHO ADMIN
+  // =================================================================
+  const html = `
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>DuyHub - Admin Dashboard</title>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f0f11; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .container { background: #1a1a1f; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.8); width: 100%; max-width: 450px; border: 1px solid #333; }
+            h2 { text-align: center; color: #00ff88; margin-top: 0; margin-bottom: 20px; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
+            .input-group { margin-bottom: 15px; }
+            label { display: block; margin-bottom: 5px; font-size: 13px; color: #aaa; }
+            input, textarea { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #333; background: #0f0f11; color: white; font-size: 14px; outline: none; box-sizing: border-box; transition: 0.3s; font-family: inherit; }
+            input:focus, textarea:focus { border-color: #00ff88; box-shadow: 0 0 8px rgba(0, 255, 136, 0.2); }
+            textarea { resize: vertical; min-height: 80px; }
+            button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 6px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.3s; box-sizing: border-box; }
+            button:active { transform: scale(0.98); }
+            .btn-add { background: rgba(0, 255, 136, 0.1); color: #00ff88; border: 1px solid #00ff88; }
+            .btn-add:hover { background: #00ff88; color: black; }
+            .btn-reset { background: rgba(243, 156, 18, 0.1); color: #f39c12; border: 1px solid #f39c12; }
+            .btn-reset:hover { background: #f39c12; color: black; }
+            .btn-del { background: rgba(255, 71, 87, 0.1); color: #ff4757; border: 1px solid #ff4757; }
+            .btn-del:hover { background: #ff4757; color: white; }
+            .result-box { margin-top: 20px; padding: 12px; border-radius: 6px; background: #0f0f11; border: 1px dashed #333; text-align: center; font-size: 14px; min-height: 20px; line-height: 1.5; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>👑 DuyHub Panel</h2>
+            
+            <div class="input-group">
+                <label>Mật khẩu Quản trị viên:</label>
+                <input type="password" id="adminPass" placeholder="••••••••••••">
+            </div>
 
-    <script>
-        async function sendAction(action) {
-            const pass = document.getElementById('pass').value;
-            const account = document.getElementById('user').value;
-            const log = document.getElementById('log');
+            <div class="input-group">
+                <label>Danh sách tài khoản (Cách nhau bằng dấu phẩy hoặc xuống dòng):</label>
+                <textarea id="username" placeholder="khiem1\nkhiem2\ntuan123"></textarea>
+            </div>
 
-            log.style.color = '#fff';
-            log.innerHTML = '⏳ Đang xử lý...';
+            <button class="btn-add" onclick="executeAction('add')">➕ CẤP QUYỀN HÀNG LOẠT</button>
+            <button class="btn-reset" onclick="executeAction('reset')">🔄 MỞ KHÓA NICK HÀNG LOẠT</button>
+            <button class="btn-del" onclick="executeAction('del')">🗑️ THU HỒI HÀNG LOẠT</button>
 
-            try {
-                const res = await fetch('/api/admin', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pass, action, account })
-                });
-                
-                const data = await res.json();
-                if (data.success) {
-                    log.style.color = '#00ff88';
-                } else {
-                    log.style.color = '#ff4757';
+            <div id="output" class="result-box" style="color: #888;">Hệ thống đang chờ lệnh...</div>
+        </div>
+
+        <script>
+            async function executeAction(actionType) {
+                const pass = document.getElementById('adminPass').value;
+                const account = document.getElementById('username').value;
+                const output = document.getElementById('output');
+
+                if (!pass || !account) {
+                    output.innerHTML = "<span style='color: #ff4757;'>❌ Vui lòng điền đủ mật khẩu và danh sách khách!</span>";
+                    return;
                 }
-                log.innerHTML = data.msg;
-            } catch (e) {
-                log.style.color = '#ff4757';
-                log.innerHTML = '❌ Lỗi mất kết nối mạng!';
+
+                output.innerHTML = "⏳ Đang kết nối tới máy chủ Vercel KV...";
+
+                try {
+                    const res = await fetch('/api/admin', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pass, action: actionType, account })
+                    });
+                    
+                    const data = await res.json();
+
+                    if (data.success) {
+                        output.innerHTML = "<span style='color: #00ff88;'>" + data.msg + "</span>";
+                    } else {
+                        output.innerHTML = "<span style='color: #ff4757;'>" + data.msg + "</span>";
+                    }
+                } catch (err) {
+                    output.innerHTML = "<span style='color: #ff4757;'>❌ Lỗi kết nối mạng! Không thể gửi lệnh.</span>";
+                }
             }
-        }
-    </script>
-</body>
-</html>
-  `);
+        </script>
+    </body>
+    </html>
+  `;
+  
+  res.setHeader('Content-Type', 'text/html');
+  return res.status(200).send(html);
 }
