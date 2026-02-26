@@ -28,11 +28,18 @@ export default async function handler(req, res) {
 
     const accountData = await users.findOne({ account: userAccount });
 
-    // Nếu không có tài khoản hoặc tài khoản bị khóa
+    // 1. Kiểm tra không có tài khoản hoặc tài khoản bị khóa
     if (!accountData || !accountData.active) {
       return res.status(200).send("DUYHUB_FAIL");
     }
 
+    // 2. KIỂM TRA HẠN SỬ DỤNG (Ngày thuê)
+    // Nếu có trường expireAt và thời gian hiện tại lớn hơn expireAt -> Hết hạn
+    if (accountData.expireAt && Date.now() > accountData.expireAt) {
+      return res.status(200).send("DUYHUB_FAIL");
+    }
+
+    // 3. Kiểm tra danh sách Nick Roblox
     const allowedNicks = accountData.robloxNames || [];
     
     // Nếu tên nick đang chạy Script KHÔNG NẰM TRONG danh sách Admin cho phép
