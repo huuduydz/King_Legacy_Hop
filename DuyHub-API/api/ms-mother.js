@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
   // 3. Quyết định Đá Văng
   if (isBrowserOrTool && !isMobileOrExecutor) {
-    return res.send(`print("🤬 Dumper tính bú code à? Còn cái nịt!")`);
+    return res.send(`print("Anh bạn à, không làm mà đòi có ăn thì ăn gì? ")`);
   }
   if (!userAccount || !playerName) {
     return res.send(`game.Players.LocalPlayer:Kick("❌ Lỗi: Thiếu _G.account hoặc Tên ingame Roblox!")`);
