@@ -105,7 +105,7 @@ export default async function handler(req, res) {
             
             #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 12, 16, 0.95); display: flex; justify-content: center; align-items: center; z-index: 1000; flex-direction: column; }
             #authOverlay input { padding: 15px; font-size: 18px; text-align: center; width: 300px; border-radius: 8px; border: 2px solid var(--primary); background: transparent; color: white; outline: none; margin-bottom: 15px;}
-            #authOverlay button { padding: 12px 30px; font-size: 16px; border-radius: 8px; background: var(--primary); color: #000; border: none; cursor: pointer; font-weight: bold;}
+            #authOverlay button { flex: none; width: 300px; padding: 12px 30px; font-size: 16px; border-radius: 8px; background: var(--primary); color: #000; border: none; cursor: pointer; font-weight: bold;}
 
             .dashboard { display: none; width: 100%; max-width: 1200px; gap: 20px; grid-template-columns: 1fr 2fr; }
             .panel { background: var(--panel); padding: 25px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid rgba(102, 252, 241, 0.2); }
