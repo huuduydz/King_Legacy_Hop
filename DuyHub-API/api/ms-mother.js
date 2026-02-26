@@ -15,11 +15,29 @@ export default async function handler(req, res) {
 
   const userAccount = req.query.account; // Ví dụ: "khiem"
   const playerName = req.query.name;     // Ví dụ: "khiem2" (Tên trong game)
-  // Lấy thông tin thiết bị đang gửi yêu cầu
-  const userAgent = req.headers['user-agent'] || "";
+  // Lấy User-Agent và đưa về chữ thường để dễ check
+  const userAgent = (req.headers['user-agent'] || '').toLowerCase();
 
-  // Nếu là Google Chrome, Safari, Cốc Cốc, Postman... -> ĐÁ VĂNG
-  if (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Postman")) {
+  // 1. Nhận diện các trình duyệt PC hoặc Tool test API
+  const isBrowserOrTool = 
+    userAgent.includes("postman") || 
+    userAgent.includes("insomnia") || 
+    userAgent.includes("curl") ||
+    // Nếu là Windows/Mac mà có Chrome/Safari thì khả năng cao là trình duyệt PC
+    ((userAgent.includes("windows nt") || userAgent.includes("macintosh")) && (userAgent.includes("chrome") || userAgent.includes("safari")));
+
+  // 2. Nhận diện các Executor hoặc Mobile (Whitelist)
+  // Mobile executor thường dùng Dalvik, Roblox, hoặc để hẳn tên Executor
+  const isMobileOrExecutor = 
+    userAgent.includes("roblox") || 
+    userAgent.includes("dalvik") || 
+    userAgent.includes("delta") || 
+    userAgent.includes("codex") || 
+    userAgent.includes("arceus") || 
+    userAgent.includes("fluxus");
+
+  // 3. Quyết định Đá Văng
+  if (isBrowserOrTool && !isMobileOrExecutor) {
     return res.send(`print("🤬 Dumper tính bú code à? Còn cái nịt!")`);
   }
   if (!userAccount || !playerName) {
